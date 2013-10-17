@@ -6,6 +6,7 @@
 
 #include <string>
 #include <iostream>
+#include <stdio.h>
 
 namespace JsonBox {
 	class Array;
@@ -605,6 +606,16 @@ namespace JsonBox {
 		 * Pointer to the Value's data.
 		 */
 		ValueDataPointer data;
+	};
+
+	class Exception
+	{
+	public:
+		Exception( const char* msg ) : msg(msg) {}
+		const std::string& message() const { return msg; }
+
+	private:
+		std::string msg;
 	};
 }
 
