@@ -608,11 +608,11 @@ namespace JsonBox {
 		ValueDataPointer data;
 	};
 
-	class Exception
+	class Exception : public std::exception
 	{
 	public:
 		Exception( const char* msg ) : msg(msg) {}
-		const std::string& message() const { return msg; }
+		virtual const char* what() const noexcept { return msg.c_str(); }
 
 	private:
 		std::string msg;

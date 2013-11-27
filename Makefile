@@ -5,11 +5,14 @@
 PROJECT = JsonBox
 
 CFLAGS += -I./include/
-CXXFLAGS = $(CFLAGS)
+CXXFLAGS = $(CFLAGS) -std=c++11
+#CXXFLAGS += -O0 -g
+#CXXFLAGS += -s
+CXXFLAGS += -stdlib=libc++
 
-ifeq (1,${DEBUG})
-	CFLAGS += -g
-endif
+#ifeq (1,${DEBUG})
+#	CFLAGS += -g
+#endif
 
 SRC = $(wildcard src/*.cpp)
 OBJS = $(SRC:src/%.cpp=build/objs/%.o)
@@ -27,7 +30,7 @@ build/objs:
 	mkdir -p $@
 
 build/objs/%.o: src/%.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	g++ $(CXXFLAGS) -c $< -o $@
 
 # Example programs
 
