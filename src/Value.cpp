@@ -666,6 +666,13 @@ namespace JsonBox {
 				}
 			}
 
+			if (noErrors)
+			{
+				if (input.eof())
+					throw Exception("json input ends incorrectly");
+				else if (!input.good())
+					throw Exception("bad json input");
+			}
 		} else {
 			std::cout << "File is not in UTF-8, not parsing." << std::endl;
 		}
@@ -676,11 +683,19 @@ namespace JsonBox {
 		file.open(filePath.c_str());
 
 		if (file.is_open()) {
-			loadFromStream(file);
+			try
+			{
+				loadFromStream(file);
+			}
+			catch (Exception&)
+			{
+				file.close();
+				throw;
+			}
 			file.close();
 
 		} else {
-			std::cout << "Failed to open file to load the json: " << filePath << std::endl;
+			throw Exception("Failed to open file to load the json");
 		}
 	}
 
@@ -699,7 +714,7 @@ namespace JsonBox {
 			file.close();
 
 		} else {
-			std::cout << "Failed to open file to write the json into: " << filePath << std::endl;
+			throw Exception("Failed to open file to write the json into");
 		}
 	}
 
@@ -847,6 +862,9 @@ namespace JsonBox {
 				}
 			}
 		}
+
+		if (noErrors && input.eof())
+			throw Exception("json input ends incorrectly");
 	}
 
 	void Value::readObject(std::istream &input, Object &result) {
@@ -899,6 +917,9 @@ namespace JsonBox {
 				}
 			}
 		}
+
+		if (noErrors && input.eof())
+			throw Exception("json input ends incorrectly");
 	}
 
 	void Value::readArray(std::istream &input, Array &result) {
@@ -933,6 +954,9 @@ namespace JsonBox {
 				}
 			}
 		}
+
+		if (notDone && input.eof())
+			throw Exception("json input ends incorrectly");
 	}
 
 	void Value::readNumber(std::istream &input, JsonBox::Value &result) {
@@ -988,6 +1012,9 @@ namespace JsonBox {
 				notDone = false;
 			}
 		}
+
+		if (notDone && input.eof())
+			throw Exception("json input ends incorrectly");
 
 		if (inFraction || inExponent) {
 			double doubleResult;
