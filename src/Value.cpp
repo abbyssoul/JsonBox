@@ -523,23 +523,22 @@ namespace JsonBox {
 		loadFromStream(jsonStream);
 	}
 
-	void errorV(const char* fmt, va_list arg) {
+	void errorV(const char* fmt, va_list args) {
 #ifdef EXCEPTION_SUPPORTED
-		throw Exception(fmt);
+		char buffer[256]; // Yeah, I know about overflows. FIXIT
+		vsnprintf (buffer, 255, fmt, args);
+
+		throw Exception(buffer);
 #else
-		vfprintf(stderr, fmt, arg);
+		vfprintf(stderr, fmt, args);
 #endif//EXCEPTION_SUPPORTED
 	}
 
 	void error(const char* fmt, ...) {
-#ifdef EXCEPTION_SUPPORTED
-		throw Exception(fmt);
-#else
 		va_list args;
 		va_start(args, fmt);
 		errorV(fmt, args);
 		va_end(args);
-#endif//EXCEPTION_SUPPORTED
 	}
 
 

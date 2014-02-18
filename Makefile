@@ -5,7 +5,7 @@
 PROJECT = JsonBox
 
 CFLAGS += -I./include/
-CXXFLAGS = $(CFLAGS)
+CXXFLAGS = $(CFLAGS) -Wall 
 
 ifeq (1,${DEBUG})
 	CFLAGS += -g
@@ -14,7 +14,7 @@ endif
 ifeq (1,${USE_CLANG})
 	AR = ar
 	CXX=clang++
-	CXXFLAGS += -std=c++11 -stdlib=libc++
+	CXXFLAGS += -stdlib=libc++
 	LINK = clang++
 	LFLAGS = -ccc-gcc-name g++ -stdlib=libc++
   	LIBS= $(SUBLIBS) -lJsonBox -lc++abi
