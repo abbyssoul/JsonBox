@@ -7,6 +7,13 @@
 #include <string>
 #include <iostream>
 
+#define EXCEPTION_SUPPORTED
+
+
+#ifdef EXCEPTION_SUPPORTED
+#include <exception> 
+ #endif//EXCEPTION_SUPPORTED
+
 namespace JsonBox {
 	class Array;
 	class Object;
@@ -606,6 +613,20 @@ namespace JsonBox {
 		 */
 		ValueDataPointer data;
 	};
+
+#ifdef EXCEPTION_SUPPORTED
+	class Exception : public std::exception {
+	public:
+		Exception( const char* msg ) : msg(msg) {}
+		virtual ~Exception() throw() {}
+
+		virtual const char* what() const throw() { return msg.c_str(); }
+
+	private:
+		const std::string msg;
+	};
+
+#endif//EXCEPTION_SUPPORTED
 }
 
 #endif

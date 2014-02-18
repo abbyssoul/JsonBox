@@ -11,6 +11,15 @@ ifeq (1,${DEBUG})
 	CFLAGS += -g
 endif
 
+ifeq (1,${USE_CLANG})
+	AR = ar
+	CXX=clang++
+	CXXFLAGS += -std=c++11 -stdlib=libc++
+	LINK = clang++
+	LFLAGS = -ccc-gcc-name g++ -stdlib=libc++
+  	LIBS= $(SUBLIBS) -lJsonBox -lc++abi
+endif
+
 SRC = $(wildcard src/*.cpp)
 OBJS = $(SRC:src/%.cpp=build/objs/%.o)
 
@@ -34,13 +43,13 @@ build/objs/%.o: src/%.cpp
 examples: build/example1
 
 build/example1: examples/main.cpp build/objs build/$(LIBNAME)
-	$(CXX) $(CXXFLAGS) -o $@ -Lbuild -l$(PROJECT) $<
+	$(CXX) $(CXXFLAGS) -o $@ $< -Lbuild -l$(PROJECT) 
 	chmod +x $@
 
 # Phony targets
 
 clean:
-	rm -rf build
+	$(RM) -r build
 
 rebuild: clean all
 
@@ -50,6 +59,7 @@ help:
 	@echo "To compile everything, simply make."
 	@echo "Available parameters:"
 	@echo "    lib        Builds the library"
+	@echo "    examples	  Builds examples" 
 	@echo "    DEBUG=1    Builds with debug symbols"
 
 .PHONY: clean rebuild help \

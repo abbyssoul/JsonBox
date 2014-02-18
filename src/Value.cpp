@@ -6,6 +6,8 @@
 #include <list>
 #include <iomanip>
 #include <fstream>
+#include <cstdarg>
+
 
 #include <JsonBox/Grammar.h>
 #include <JsonBox/Convert.h>
@@ -521,6 +523,52 @@ namespace JsonBox {
 		loadFromStream(jsonStream);
 	}
 
+	void errorV(const char* fmt, va_list arg) {
+#ifdef EXCEPTION_SUPPORTED
+		throw Exception(fmt);
+#else
+		vfprintf(stderr, fmt, arg);
+#endif//EXCEPTION_SUPPORTED
+	}
+
+	void error(const char* fmt, ...) {
+#ifdef EXCEPTION_SUPPORTED
+		throw Exception(fmt);
+#else
+		va_list args;
+		va_start(args, fmt);
+		errorV(fmt, args);
+		va_end(args);
+#endif//EXCEPTION_SUPPORTED
+	}
+
+
+	/**
+	* Try to read given literal
+	* Return false in case of an error
+	*/
+	bool readLiteral(std::istream &input, const std::string& expected) {
+		
+		char currentCharacter = expected[0];
+
+		// We start with 1 because this is a precondition
+		const size_t length = expected.length();
+		for (unsigned int i = 1; i < length; ++i) {
+			if (input.eof()) {
+				error("Unexpected end of json input");
+				return false;
+			}
+
+			input.get(currentCharacter);
+			if (currentCharacter != expected[i]) {
+				error("invalid characters found %c", currentCharacter);
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	void Value::loadFromStream(std::istream &input) {
 		char currentCharacter;
 
@@ -529,145 +577,76 @@ namespace JsonBox {
 		input.get(encoding[0]);
 		input.get(encoding[1]);
 
-		if (encoding[0] != '\0' && encoding[1] != '\0') {
-			// We put the characters back.
-			input.putback(encoding[1]);
-			input.putback(encoding[0]);
+		if (encoding[0] == '\0' || encoding[1] == '\0') {
+			error("File is not in UTF-8, not parsing.");
+			return;
+		}
 
-			// Boolean value used to stop reading characters after the value
-			// is done loading.
-			bool noErrors = true;
+		// We put the characters back.
+		input.putback(encoding[1]);
+		input.putback(encoding[0]);
 
-			while (noErrors && input.good()) {
-				input.get(currentCharacter);
+		// Boolean value used to stop reading characters after the value
+		// is done loading.
+		bool continueReading = true;
 
-				if (input.good()) {
-					if (currentCharacter == Structural::BEGIN_END_STRING) {
-						// The value to be parsed is a string.
-						setString("");
-						readString(input, *data.stringValue);
-						noErrors = false;
+		while (continueReading && input.good()) {
+			input.get(currentCharacter);
 
-					} else if (currentCharacter == Structural::BEGIN_OBJECT) {
-						// The value to be parsed is an object.
-						setObject(Object());
-						readObject(input, *data.objectValue);
-						noErrors = false;
+			if (input.good()) {
+				if (currentCharacter == Structural::BEGIN_END_STRING) {
+					// The value to be parsed is a string.
+					setString("");
+					readString(input, *data.stringValue);
+					continueReading = false;
 
-					} else if (currentCharacter == Structural::BEGIN_ARRAY) {
-						// The value to be parsed is an array.
-						setArray(Array());
-						readArray(input, *data.arrayValue);
-						noErrors = false;
+				} else if (currentCharacter == Structural::BEGIN_OBJECT) {
+					// The value to be parsed is an object.
+					setObject(Object());
+					readObject(input, *data.objectValue);
+					continueReading = false;
 
-					} else if (currentCharacter == Literals::NULL_STRING[0]) {
-						// We try to read the literal 'null'.
-						if (!input.eof()) {
-							input.get(currentCharacter);
+				} else if (currentCharacter == Structural::BEGIN_ARRAY) {
+					// The value to be parsed is an array.
+					setArray(Array());
+					readArray(input, *data.arrayValue);
+					continueReading = false;
 
-							if (currentCharacter == Literals::NULL_STRING[1]) {
-								if (!input.eof()) {
-									input.get(currentCharacter);
+				} else if (currentCharacter == Literals::NULL_STRING[0]) {
+					readLiteral(input, Literals::NULL_STRING);
+					continueReading = false;
+	
+					setNull();
+				} else if (currentCharacter == Numbers::MINUS ||
+				           (currentCharacter >= Numbers::DIGITS[0] && currentCharacter <= Numbers::DIGITS[9])) {
+					// Numbers can't start with zeroes.
+					input.putback(currentCharacter);
+					readNumber(input, *this);
+					continueReading = false;
 
-									if (currentCharacter == Literals::NULL_STRING[2]) {
-										if (!input.eof()) {
-											input.get(currentCharacter);
-
-											if (currentCharacter == Literals::NULL_STRING[3]) {
-												setNull();
-												noErrors = false;
-
-											} else {
-												std::cout << "invalid characters found" << std::endl;
-											}
-
-										} else {
-											std::cout << "json input ends incorrectly" << std::endl;
-										}
-
-									} else {
-										std::cout << "invalid characters found" << std::endl;
-									}
-
-								} else {
-									std::cout << "json input ends incorrectly" << std::endl;
-								}
-
-							} else {
-								std::cout << "invalid characters found" << std::endl;
-							}
-
-						} else {
-							std::cout << "json input ends incorrectly" << std::endl;
-						}
-
-					} else if (currentCharacter == Numbers::MINUS ||
-					           (currentCharacter >= Numbers::DIGITS[0] && currentCharacter <= Numbers::DIGITS[9])) {
-						// Numbers can't start with zeroes.
-						input.putback(currentCharacter);
-						readNumber(input, *this);
-						noErrors = false;
-
-					} else if (currentCharacter == Literals::TRUE_STRING[0]) {
-						// We try to read the boolean literal 'true'.
-						if (!input.eof()) {
-							input.get(currentCharacter);
-
-							if (currentCharacter == Literals::TRUE_STRING[1]) {
-								if (!input.eof()) {
-									input.get(currentCharacter);
-
-									if (currentCharacter == Literals::TRUE_STRING[2]) {
-										if (!input.eof()) {
-											input.get(currentCharacter);
-
-											if (currentCharacter == Literals::TRUE_STRING[3]) {
-												setBoolean(true);
-												noErrors = false;
-											}
-										}
-									}
-								}
-							}
-						}
-
-					} else if (currentCharacter == Literals::FALSE_STRING[0]) {
-						// We try to read the boolean literal 'false'.
-						if (!input.eof()) {
-							input.get(currentCharacter);
-
-							if (currentCharacter == Literals::FALSE_STRING[1]) {
-								if (!input.eof()) {
-									input.get(currentCharacter);
-
-									if (currentCharacter == Literals::FALSE_STRING[2]) {
-										if (!input.eof()) {
-											input.get(currentCharacter);
-
-											if (currentCharacter == Literals::FALSE_STRING[3]) {
-												if (!input.eof()) {
-													input.get(currentCharacter);
-
-													if (currentCharacter == Literals::FALSE_STRING[4]) {
-														setBoolean(false);
-														noErrors = false;
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-
-					} else if (!isWhiteSpace(currentCharacter)) {
-						std::cout << "Invalid character found: '" << currentCharacter << "'" << std::endl;
-					}
+				} else if (currentCharacter == Literals::TRUE_STRING[0]) {
+					// We try to read the boolean literal 'true'.
+					readLiteral(input, Literals::TRUE_STRING);
+					continueReading = false;
+	
+					setBoolean(true);
+				} else if (currentCharacter == Literals::FALSE_STRING[0]) {
+					// We try to read the boolean literal 'false'.
+					readLiteral(input, Literals::FALSE_STRING);
+					continueReading = false;
+	
+					setBoolean(false);
+				} else if (!isWhiteSpace(currentCharacter)) {
+					error("Unexpected characted in the input %c", currentCharacter);
 				}
 			}
+		}
 
-		} else {
-			std::cout << "File is not in UTF-8, not parsing." << std::endl;
+		if (continueReading) {
+			if (input.eof())
+				error("json input ends incorrectly");
+			else if (!input.good())
+				error("bad json input");
 		}
 	}
 
@@ -675,12 +654,10 @@ namespace JsonBox {
 		std::ifstream file;
 		file.open(filePath.c_str());
 
-		if (file.is_open()) {
+		if (file.is_open()) {	// Note: No need to close file, RAII
 			loadFromStream(file);
-			file.close();
-
 		} else {
-			std::cout << "Failed to open file to load the json: " << filePath << std::endl;
+			error("[%s]: Failed to open file to load the json", filePath.c_str());
 		}
 	}
 
@@ -696,10 +673,8 @@ namespace JsonBox {
 
 		if (file.is_open()) {
 			writeToStream(file, indent, escapeAll);
-			file.close();
-
 		} else {
-			std::cout << "Failed to open file to write the json into: " << filePath << std::endl;
+			error("[%s]: Failed to open file to write the json", filePath.c_str());
 		}
 	}
 
@@ -814,7 +789,7 @@ namespace JsonBox {
 
 								} else {
 									noUnicodeError = false;
-									std::cout << "Invalid \\u character, skipping it." << std::endl;
+									error("Invalid \\u character, try skipping it.");
 								}
 
 								++tmpCounter;
@@ -846,6 +821,10 @@ namespace JsonBox {
 					constructing << currentCharacter;
 				}
 			}
+		}
+
+		if (noErrors && input.eof()) {
+			error("json input ends incorrectly");
 		}
 	}
 
@@ -895,22 +874,26 @@ namespace JsonBox {
 					noErrors = false;
 
 				} else if (!isWhiteSpace(currentCharacter)) {
-					std::cout << "Expected '\"', got '" << currentCharacter << "', ignoring it." << std::endl;
+					error("Unexpected character in the input");
 				}
 			}
+		}
+
+		if (noErrors && input.eof()) {
+			error("json input ends incorrectly");
 		}
 	}
 
 	void Value::readArray(std::istream &input, Array &result) {
-		bool notDone = true;
+		bool continueReading = true;
 		char currentChar;
 
-		while (notDone && !input.eof()) {
+		while (continueReading && !input.eof()) {
 			input.get(currentChar);
 
 			if (input.good()) {
 				if (currentChar == Structural::END_ARRAY) {
-					notDone = false;
+					continueReading = false;
 
 				} else if (!isWhiteSpace(currentChar)) {
 					input.putback(currentChar);
@@ -928,15 +911,19 @@ namespace JsonBox {
 					}
 
 					if (currentChar == Structural::END_ARRAY) {
-						notDone = false;
+						continueReading = false;
 					}
 				}
 			}
 		}
+
+		if (continueReading && input.eof()) {
+			error("json input ends incorrectly");
+		}
 	}
 
 	void Value::readNumber(std::istream &input, JsonBox::Value &result) {
-		bool notDone = true, inFraction = false, inExponent = false;
+		bool continueReading = true, inFraction = false, inExponent = false;
 		char currentCharacter;
 		std::stringstream constructing;
 
@@ -945,14 +932,14 @@ namespace JsonBox {
 			input.get(currentCharacter);
 
 			if (input.peek() == '0') {
-				notDone = false;
+				continueReading = false;
 
 			} else {
 				input.putback(currentCharacter);
 			}
 		}
 
-		while (notDone && !input.eof()) {
+		while (continueReading && !input.eof()) {
 			input.get(currentCharacter);
 
 			if (currentCharacter == '-') {
@@ -960,7 +947,7 @@ namespace JsonBox {
 					constructing << currentCharacter;
 
 				} else {
-					std::cout << "Expected a digit, '.', 'e' or 'E', got '" << currentCharacter << "' instead, ignoring it." << std::endl;
+					error("Expected a digit, '.', 'e' or 'E', but got '%c'", currentCharacter);
 				}
 
 			} else if (currentCharacter >= '0' && currentCharacter <= '9') {
@@ -985,8 +972,12 @@ namespace JsonBox {
 
 			} else {
 				input.putback(currentCharacter);
-				notDone = false;
+				continueReading = false;
 			}
+		}
+
+		if (continueReading && input.eof()) {
+			error("json input ends incorrectly");
 		}
 
 		if (inFraction || inExponent) {
@@ -1038,8 +1029,7 @@ namespace JsonBox {
 		}
 	}
 
-	void Value::output(std::ostream &output, bool indent,
-	                   bool escapeAll) const {
+	void Value::output(std::ostream &output, bool indent, bool escapeAll) const{
 		if (indent) {
 			if (escapeAll) {
 				OutputFilter<SolidusEscaper> solidusEscaper(output.rdbuf());
